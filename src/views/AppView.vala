@@ -23,7 +23,8 @@ namespace Optimizer.Views {
      *
      * @since 1.0.0
      */
-    public class AppView : Gtk.Stack {
+    public class AppView : Granite.Bin {
+        public Gtk.Stack          stack { get; private set; }
         private DashboardView     dashboard_view;
         private SystemCleanerView system_cleaner_view;
         private ProcessesView     processes_view;
@@ -32,17 +33,20 @@ namespace Optimizer.Views {
          * Constructs a new {@code AppView} object.
          */
         public AppView () {
-            transition_type = Gtk.StackTransitionType.SLIDE_LEFT_RIGHT;
-            transition_duration = 500;
+            stack = new Gtk.Stack () {
+                transition_type = Gtk.StackTransitionType.SLIDE_LEFT_RIGHT,
+                transition_duration = 500
+            };
+            child = stack;
 
             dashboard_view = new DashboardView ();
-            add_titled (dashboard_view, "dashboard", _("Dashboard"));
+            stack.add_titled (dashboard_view, "dashboard", _("Dashboard"));
 
             system_cleaner_view = new SystemCleanerView ();
-            add_titled (system_cleaner_view, "system-cleaner", _("Cleaner"));
+            stack.add_titled (system_cleaner_view, "system-cleaner", _("Cleaner"));
 
             processes_view = new ProcessesView ();
-            add_titled (processes_view, "processes", _("Processes"));
+            stack.add_titled (processes_view, "processes", _("Processes"));
         }
     }
 }

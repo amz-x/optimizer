@@ -1,30 +1,29 @@
-project('com.github.hannesschulze.optimizer', 'c', 'vala', version: '1.2.1')
+project(
+  'com.github.hannesschulze.optimizer',
+  'c', 'vala',
+  version: '1.2.1',
+  meson_version: '>= 0.59.0'
+)
 
+gnome = import('gnome')
 i18n = import('i18n')
 
-add_global_arguments('-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name()), language:'c')
+add_global_arguments('-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name()), language: 'c')
 
-c_args = [
-  '-DWNCK_I_KNOW_THIS_IS_UNSTABLE'
-]
-
-use_fallback_theme = get_option ('use_fallback_theme')
+use_fallback_theme = get_option('use_fallback_theme')
 
 subdir('src')
 
 optimizer_deps = [
-  dependency('gobject-2.0'),
   dependency('glib-2.0'),
-  dependency('granite'),
-  dependency('gtk+-3.0'),
-  dependency('gdk-x11-3.0'),
+  dependency('gobject-2.0'),
+  dependency('gee-0.8'),
+  dependency('granite-9', default_options: ['demo=false', 'introspection=false']),
+  dependency('gtk4', version: '>= 4.22'),
   dependency('libgtop-2.0'),
-  dependency('libwnck-3.0'),
   meson.get_compiler('c').find_library('m'),
   meson.get_compiler('vala').find_library('posix'),
 ]
-
-gnome = import('gnome')
 
 optimizer_sources += gnome.compile_resources(
   'optimizer-resources',
@@ -38,14 +37,17 @@ executable(
   optimizer_sources,
   dependencies: optimizer_deps,
   install: true,
-  c_args: c_args,
   vala_args: [
-    '--vapidir=' + meson.source_root() + '/vapi/',
-    '--target-glib=2.50'
+    '--vapidir=' + meson.project_source_root() / 'vapi',
+    '--target-glib=2.74'
   ]
 )
 
 subdir('data')
 subdir('po')
 
-meson.add_install_script('build-aux/meson/postinstall.py')
+gnome.post_install(
+  glib_compile_schemas: true,
+  gtk_update_icon_cache: true,
+  update_desktop_database: true
+)

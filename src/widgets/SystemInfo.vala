@@ -25,20 +25,21 @@ namespace Optimizer.Widgets {
      *
      * @since 1.0.0
      */
-    public class SystemInfo : Gtk.Label {
+    public class SystemInfo : Granite.Bin {
+        private Gtk.Label label;
+
         /**
          * Constructs a new {@code Label} object.
          */
         public SystemInfo () {
-            Object (
-                label: ""
-            );
-
-            this.use_markup = true;
-            this.justify = Gtk.Justification.CENTER;
+            label = new Gtk.Label ("") {
+                use_markup = true,
+                justify = Gtk.Justification.CENTER
+            };
+            child = label;
 
             // Hostname
-            this.label += "<b>%s</b> %s\n".printf
+            label.label += "<b>%s</b> %s\n".printf
                 (_("Hostname:"), Environment.get_host_name ());
 
             // Distro
@@ -56,7 +57,7 @@ namespace Optimizer.Widgets {
                 }
 
                 var os = osrel["PRETTY_NAME"];
-                this.label += "<b>%s</b> %s\n".printf
+                label.label += "<b>%s</b> %s\n".printf
                     (_("Distribution:"), os);
             } catch (Error e) {
                 warning ("Couldn't read os-release file");
@@ -76,20 +77,20 @@ namespace Optimizer.Widgets {
                     arch = "32-bit";
                     break;
             }
-            this.label += "<b>%s</b> %s\n".printf
+            label.label += "<b>%s</b> %s\n".printf
                 (_("Architecture:"), arch);
 
             // Kernel
             var kernel = "%s %s".printf (uts_name.sysname, uts_name.release);
-            this.label += "<b>%s</b> %s\n".printf
+            label.label += "<b>%s</b> %s\n".printf
                 (_("Kernel:"), kernel);
 
             // Processor
-            this.label += "<b>%s</b> %s\n".printf
+            label.label += "<b>%s</b> %s\n".printf
                 (_("CPU Model:"), get_cpu ());
 
             // Cores
-            this.label += "<b>%s</b> %s".printf
+            label.label += "<b>%s</b> %s".printf
                 (_("CPU Cores:"), get_cores ());
         }
 

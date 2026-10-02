@@ -28,13 +28,17 @@ namespace Optimizer.Views {
      * @since 1.0.0
      */
     public class ProcessesView : Gtk.Box {
-        private Gtk.ScrolledWindow scrolled_window;
-        private Gtk.TreeView       tree_view;
-        private Gtk.ListStore      list_model;
-        private Gtk.ActionBar      action_bar;
-        private Gtk.SearchEntry    search_field;
-        private Gtk.Button         end_process_button;
-        private Gee.HashMap<int, Gtk.TreeIter?> processes_list;
+        private delegate string FormatFunc (Optimizer.Utils.Process process);
+
+        private Gtk.ScrolledWindow  scrolled_window;
+        private Gtk.ColumnView      column_view;
+        private GLib.ListStore      list_model;
+        private Gtk.CustomFilter    search_filter;
+        private Gtk.SingleSelection selection_model;
+        private Gtk.ActionBar       action_bar;
+        private Gtk.SearchEntry     search_field;
+        private Gtk.Button          end_process_button;
+        private Gee.HashMap<int, Optimizer.Utils.Process> processes_list;
 
         /**
          * Constructs a new {@code ProcessesView} object.
@@ -44,203 +48,192 @@ namespace Optimizer.Views {
                 orientation: Gtk.Orientation.VERTICAL
             );
 
-            get_style_context ().add_class ("processes_view");
+            add_css_class ("processes_view");
+
+            // Model: ListStore -> FilterListModel (search) -> SortListModel (columns) -> SingleSelection
+            list_model = new GLib.ListStore (typeof (Optimizer.Utils.Process));
+
+            search_filter = new Gtk.CustomFilter ((item) => {
+                var search_text = search_field.text;
+                if (search_text == "") {
+                    return true;
+                }
+
+                var process = (Optimizer.Utils.Process) item;
+                return search_text.down () in process.command.down ();
+            });
+            var filter_model = new Gtk.FilterListModel (list_model, search_filter);
+
+            column_view = new Gtk.ColumnView (null) {
+                hexpand = true,
+                vexpand = true
+            };
+
+            var sort_model = new Gtk.SortListModel (filter_model, column_view.sorter);
+            selection_model = new Gtk.SingleSelection (sort_model) {
+                autoselect = false,
+                can_unselect = true
+            };
+            column_view.model = selection_model;
 
             // Process List
-            scrolled_window = new Gtk.ScrolledWindow (null, null);
-            pack_start (scrolled_window, true, true, 0);
-
-            tree_view = new Gtk.TreeView ();
-            scrolled_window.add (tree_view);
-
-            // Improve readability by darkening the accent color
-            try {
-                var provider = new Gtk.CssProvider ();
-                provider.load_from_data ("@define-color colorAccent shade (@ORANGE_500, 0.85);");
-                tree_view.get_style_context ().add_provider (provider, Gtk.STYLE_PROVIDER_PRIORITY_USER);
-            } catch (GLib.Error err) {
-                stderr.printf ("Couldn't load CssProvider: %s\n", err.message);
-            }
+            scrolled_window = new Gtk.ScrolledWindow () {
+                child = column_view,
+                hexpand = true,
+                vexpand = true
+            };
+            append (scrolled_window);
 
             // Action bar with SearchEntry and End-Process-button
             action_bar = new Gtk.ActionBar ();
-            pack_end (action_bar, false, true, 0);
+            append (action_bar);
 
             search_field = new Gtk.SearchEntry ();
             action_bar.pack_start (search_field);
 
             end_process_button = new Gtk.Button.with_label (_("End Process"));
-            end_process_button.get_style_context ().add_class (Gtk.STYLE_CLASS_DESTRUCTIVE_ACTION);
+            end_process_button.add_css_class (Granite.CssClass.DESTRUCTIVE);
             action_bar.pack_end (end_process_button);
 
-            // Set up the ListStore
-            list_model = new Gtk.ListStore.newv ({
-                typeof (int),
-                typeof (uint64),
-                typeof (string),
-                typeof (float),
-                typeof (string)
-            });
-
-            // Search filter
-            var search_filter = new Gtk.TreeModelFilter (list_model, null);
-            var sort_model = new Gtk.TreeModelSort.with_model (search_filter);
-            tree_view.model = sort_model;
-
             // PID column
-            var column = new Gtk.TreeViewColumn.with_attributes (_("PID"), new Gtk.CellRendererText (), "text", 0);
-            column.resizable = true;
-            column.min_width = 37;
-            column.sort_column_id = 0;
-            tree_view.append_column (column);
+            add_column (_("PID"), "pid", (p) => p.pid.to_string (),
+                        new Gtk.NumericSorter (property_expression ("pid")), 1.0f, 60);
 
             // Memory usage column
-            var cell_renderer = new Gtk.CellRendererText ();
-            column = new Gtk.TreeViewColumn.with_attributes (_("Total Memory"), cell_renderer, "text", 1);
-            column.set_cell_data_func (cell_renderer, (cell_layout, cell, tree_model, iter) => {
-                var val = Value (typeof (uint64));
-                tree_model.get_value (iter, 1, out val);
-                var textCell = cell as Gtk.CellRendererText;
-                if (textCell != null) {
-                    textCell.text = GLib.format_size ((uint64) val, GLib.FormatSizeFlags.IEC_UNITS);
-                }
-            });
-            column.resizable = true;
-            column.min_width = 60;
-            column.sort_column_id = 1;
-            tree_view.append_column (column);
+            add_column (_("Total Memory"), "mem-usage",
+                        (p) => GLib.format_size (p.mem_usage, GLib.FormatSizeFlags.IEC_UNITS),
+                        new Gtk.NumericSorter (property_expression ("mem-usage")), 1.0f, 90);
 
             // % Memory column
             GTop.Memory memory;
             GTop.get_mem (out memory);
             float total_memory = (float) (memory.total / 1024 / 1024) / 1000;
 
-            cell_renderer = new Gtk.CellRendererText ();
-            column = new Gtk.TreeViewColumn.with_attributes (_("% Memory"), cell_renderer, "text", 1);
-            column.set_cell_data_func (cell_renderer, (cell_layout, cell, tree_model, iter) => {
-                var val = Value (typeof (uint64));
-                tree_model.get_value (iter, 1, out val);
-
-                float used_memory = (float) (((uint64) val) / 1024 / 1024) / 1000;
-
-                var textCell = cell as Gtk.CellRendererText;
-                if (textCell != null) {
-                    textCell.text = "%.1f%%".printf ((used_memory / total_memory) * 100);
-                }
-            });
-            column.resizable = true;
-            column.min_width = 60;
-            column.sort_column_id = 1;
-            tree_view.append_column (column);
+            add_column (_("% Memory"), "mem-usage", (p) => {
+                float used_memory = (float) (p.mem_usage / 1024 / 1024) / 1000;
+                return "%.1f%%".printf ((used_memory / total_memory) * 100);
+            }, new Gtk.NumericSorter (property_expression ("mem-usage")), 1.0f, 80);
 
             // User column
-            column = new Gtk.TreeViewColumn.with_attributes (_("User"), new Gtk.CellRendererText (), "text", 2);
-            column.resizable = true;
-            column.min_width = 60;
-            column.sort_column_id = 2;
-            tree_view.append_column (column);
+            add_column (_("User"), "user", (p) => p.user ?? "",
+                        new Gtk.StringSorter (property_expression ("user")), 0.0f, 80);
 
             // CPU usage column
-            cell_renderer = new Gtk.CellRendererText ();
-            column = new Gtk.TreeViewColumn.with_attributes (_("% CPU"), cell_renderer, "text", 3);
-            column.set_cell_data_func (cell_renderer, (cell_layout, cell, tree_model, iter) => {
-                var val = Value (typeof (float));
-                tree_model.get_value (iter, 3, out val);
-                var textCell = cell as Gtk.CellRendererText;
-                if (textCell != null) {
-                    textCell.text = "%.1f%%".printf ((float) val * 100);
-                }
-            });
-            column.resizable = true;
-            column.min_width = 60;
-            column.sort_column_id = 3;
-            tree_view.append_column (column);
+            add_column (_("% CPU"), "cpu-usage", (p) => "%.1f%%".printf (p.cpu_usage * 100),
+                        new Gtk.NumericSorter (property_expression ("cpu-usage")), 1.0f, 70);
 
             // Process column
-            cell_renderer = new Gtk.CellRendererText ();
-            cell_renderer.ellipsize = Pango.EllipsizeMode.END;
-            column = new Gtk.TreeViewColumn.with_attributes (_("Process"), cell_renderer, "text", 4);
-            column.min_width = 90;
-            column.sort_column_id = 4;
-            tree_view.append_column (column);
+            var process_column = add_column (_("Process"), "command", (p) => p.command ?? "",
+                                             new Gtk.StringSorter (property_expression ("command")), 0.0f, 90, true);
+            process_column.expand = true;
 
             // Searching
-            search_filter.set_visible_func ((model, iter) => {
-                var search_text = search_field.text;
-
-                if (search_text == "") {
-                    return true;
-                }
-
-                var val = Value (typeof (string));
-                model.get_value (iter, 4, out val);
-
-                if (search_text.down () in ((string) val).down ()) {
-                    return true;
-                } else {
-                    return false;
-                }
-            });
-            search_field.changed.connect (() => {
-                search_filter.refilter ();
+            search_field.search_changed.connect (() => {
+                search_filter.changed (Gtk.FilterChange.DIFFERENT);
             });
 
             // Populate the list
-            processes_list = new Gee.HashMap<int, Gtk.TreeIter?> ();
+            processes_list = new Gee.HashMap<int, Optimizer.Utils.Process> ();
 
             var process_manager = ProcessManager.get_instance ();
             process_manager.process_added.connect ((p) => {
-                Gtk.TreeIter iter;
-                list_model.append (out iter);
-                list_model.set (iter, 0, p.pid,
-                                      1, p.mem_usage,
-                                      2, p.user,
-                                      3, p.cpu_usage,
-                                      4, p.command);
-                processes_list[p.pid] = iter;
-            });
-
-            process_manager.updated.connect (() => {
-                Gee.Map<int, Optimizer.Utils.Process> processes = process_manager.get_process_list ();
-
-                foreach (var entry in processes.entries) {
-                    if (processes_list[entry.key] != null) {
-                        Gtk.TreeIter iter = processes_list[entry.key];
-
-                        list_model.set (iter, 0, entry.value.pid,
-                                              1, entry.value.mem_usage,
-                                              2, entry.value.user,
-                                              3, entry.value.cpu_usage,
-                                              4, entry.value.command);
-                    }
+                if (!processes_list.has_key (p.pid)) {
+                    processes_list[p.pid] = p;
+                    list_model.append (p);
                 }
             });
 
+            process_manager.updated.connect (() => {
+                // Rows update themselves through property bindings, but the
+                // sort order has to be recalculated with the new values.
+                column_view.sorter.changed (Gtk.SorterChange.DIFFERENT);
+            });
+
             process_manager.process_removed.connect ((pid) => {
-                if (processes_list[pid] != null) {
-                    Gtk.TreeIter iter = processes_list[pid];
-                    list_model.remove (ref iter);
+                if (processes_list.has_key (pid)) {
+                    uint position;
+                    if (list_model.find (processes_list[pid], out position)) {
+                        list_model.remove (position);
+                    }
                     processes_list.unset (pid);
                 }
             });
 
             // End Process button
             end_process_button.clicked.connect (() => {
-                Gtk.TreeModel model;
-                Gtk.TreeIter iter;
-                if (!tree_view.get_selection ().get_selected (out model, out iter)) {
+                var process = selection_model.selected_item as Optimizer.Utils.Process;
+                if (process == null) {
                     return;
                 }
-                var val = Value (typeof (int));
-                model.get_value (iter, 0, out val);
 
                 Gee.Map<int, Optimizer.Utils.Process> processes = process_manager.get_process_list ();
-                if (!processes.has_key ((int) val)) {
+                if (!processes.has_key (process.pid)) {
                     return;
                 }
 
-                processes [(int) val].kill ();
+                processes[process.pid].kill ();
             });
+        }
+
+        private static Gtk.Expression property_expression (string property) {
+            return new Gtk.PropertyExpression (typeof (Optimizer.Utils.Process), null, property);
+        }
+
+        /**
+         * Adds a column that displays one property of the process, formatted
+         * by {@code format}, and keeps it up to date while the row is shown.
+         */
+        private Gtk.ColumnViewColumn add_column (string title, string property, owned FormatFunc format,
+                                                 Gtk.Sorter sorter, float xalign, int min_width,
+                                                 bool ellipsize = false) {
+            var factory = new Gtk.SignalListItemFactory ();
+
+            factory.setup.connect ((obj) => {
+                var list_item = (Gtk.ListItem) obj;
+                var label = new Gtk.Label (null) {
+                    xalign = xalign,
+                    width_request = min_width,
+                    margin_start = 6,
+                    margin_end = 6
+                };
+                if (ellipsize) {
+                    label.ellipsize = Pango.EllipsizeMode.END;
+                }
+                if (xalign > 0.5f) {
+                    label.add_css_class (Granite.CssClass.NUMERIC);
+                }
+                list_item.child = label;
+            });
+
+            factory.bind.connect ((obj) => {
+                var list_item = (Gtk.ListItem) obj;
+                var label = (Gtk.Label) list_item.child;
+                var process = (Optimizer.Utils.Process) list_item.item;
+
+                var binding = process.bind_property (property, label, "label", BindingFlags.SYNC_CREATE,
+                    (binding, from_value, ref to_value) => {
+                        to_value.set_string (format ((Optimizer.Utils.Process) binding.dup_source ()));
+                        return true;
+                    }
+                );
+                list_item.set_data<Binding> ("optimizer-binding", binding);
+            });
+
+            factory.unbind.connect ((obj) => {
+                var list_item = (Gtk.ListItem) obj;
+                var binding = list_item.steal_data<Binding> ("optimizer-binding");
+                if (binding != null) {
+                    binding.unbind ();
+                }
+            });
+
+            var column = new Gtk.ColumnViewColumn (title, factory) {
+                resizable = true,
+                sorter = sorter
+            };
+            column_view.append_column (column);
+
+            return column;
         }
     }
 }

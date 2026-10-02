@@ -37,7 +37,7 @@ namespace Optimizer {
         public Application () {
             Object (
                 application_id: Constants.ID,
-                flags: ApplicationFlags.FLAGS_NONE
+                flags: ApplicationFlags.DEFAULT_FLAGS
             );
 
             var quit_action = new SimpleAction ("quit", null);
@@ -47,6 +47,23 @@ namespace Optimizer {
 
             add_action (quit_action);
             set_accels_for_action ("app.quit", { "<Control>q" });
+        }
+
+        /**
+         * Initializes Granite and applies the user's preferred style.
+         * @return {@code void}
+         */
+        public override void startup () {
+            base.startup ();
+
+            Granite.init ();
+
+            // Follow the system style unless the user picked one with the ModeSwitch
+            var settings = Configs.Settings.get_instance ();
+            if (settings.has_style_preference) {
+                Granite.StyleManager.get_default ().color_scheme =
+                    settings.dark_theme ? Gtk.InterfaceColorScheme.DARK : Gtk.InterfaceColorScheme.LIGHT;
+            }
         }
 
         /**

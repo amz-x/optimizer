@@ -1,0 +1,7 @@
+[wrap-git]
+url = https://github.com/elementary/granite.git
+revision = main
+depth = 1
+
+[provide]
+granite-9 = libgranite_dep

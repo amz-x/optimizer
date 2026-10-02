@@ -23,11 +23,12 @@
 namespace Optimizer.Utils {
 
     /**
-     * The {@code Process} class represents one process
+     * The {@code Process} class represents one process. It is a GObject so that
+     * list views can bind to its properties and update when they change.
      *
      * @since 1.0.0
      */
-    public class Process {
+    public class Process : GLib.Object {
         // Whether or not the PID leads to something
         public bool exists { get; private set; }
 
@@ -118,12 +119,9 @@ namespace Optimizer.Utils {
                 // Get memory usage by process
                 GTop.ProcMem proc_mem;
                 GTop.get_proc_mem (out proc_mem, pid);
+                // X server pixmap memory used to be added via libwnck, which
+                // is GTK 3 only and can't be used in a GTK 4 application.
                 mem_usage = proc_mem.resident - proc_mem.share;
-
-                if (Gdk.Display.get_default () is Gdk.X11.Display) {
-                    Wnck.ResourceUsage resu = Wnck.ResourceUsage.pid_read (Gdk.Display.get_default(), pid);
-                    mem_usage += resu.total_bytes_estimate;
-                }
 
                 // TODO: Show processes from other owners
                 user = Posix.getlogin ();

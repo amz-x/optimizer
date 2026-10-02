@@ -45,25 +45,21 @@ namespace Optimizer.Controllers {
                 this.headerbar.add_partition (mount);
             }
             this.app_view = new AppView ();
-            this.headerbar.stack_switcher.stack = this.app_view;
+            this.headerbar.stack_switcher.stack = this.app_view.stack;
 
-            this.window.add (this.app_view);
-            this.window.set_default_size (900, 540);
+            this.window.child = this.app_view;
             this.window.set_size_request (900, 540);
-            this.window.set_titlebar (this.headerbar);
+            this.window.titlebar = this.headerbar;
             this.application.add_window (window);
-
-            // Flip the sort indicator's direction
-            Gtk.Settings.get_default ().set ("gtk-alternative_sort_arrows", true);
         }
 
         public void activate () {
-            window.show_all ();
-            app_view.activate ();
+            window.present ();
         }
 
         public void quit () {
-            window.destroy ();
+            // Closing (rather than destroying) the window lets it save its state
+            window.close ();
         }
     }
 }

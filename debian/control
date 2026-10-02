@@ -3,13 +3,13 @@ Section: x11
 Priority: optional
 Maintainer: Hannes Schulze <haschu0103@gmail.com>
 Build-Depends: debhelper (>= 10.5.1),
-               libgranite-dev (>= 0.5),
+               libgranite-9-dev,
                gettext,
-               libgtk-3-dev (>= 3.12),
-               meson,
-               valac (>= 0.28.0),
-               libgtop2-dev,
-               libwnck-3-dev
+               libgee-0.8-dev,
+               libgtk-4-dev (>= 4.22),
+               meson (>= 0.59.0),
+               valac (>= 0.56),
+               libgtop2-dev
 Standards-Version: 4.1.1
 
 Package: com.github.hannesschulze.optimizer
