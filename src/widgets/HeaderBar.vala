@@ -27,18 +27,17 @@ namespace Optimizer.Widgets {
      * @see Gtk.HeaderBar
      * @since 1.0.0
      */
-    public class HeaderBar : Gtk.HeaderBar {
+    public class HeaderBar : Granite.Bin {
+        // Gtk.HeaderBar is sealed in GTK 4, so it is wrapped instead of subclassed
+        private Gtk.HeaderBar    headerbar;
 
         public Gtk.StackSwitcher stack_switcher { get; set; }
         public Gtk.MenuButton    menu_button { get; set; }
-        public Gtk.Popover       menu { get; set; }
+        public Gtk.PopoverMenu   menu { get; set; }
         public GLib.Menu         partition_menu;
 
         /**
          * Constructs a new {@code HeaderBar} object.
-         *
-         * @see App.Configs.Properties
-         * @see icon_settings
          */
         public HeaderBar (Gtk.Application app) {
             SimpleAction partition_action = new SimpleAction.stateful ("partition-action",
@@ -51,55 +50,49 @@ namespace Optimizer.Widgets {
             });
             app.add_action (partition_action);
 
+            headerbar = new Gtk.HeaderBar ();
+            child = headerbar;
+
             stack_switcher = new Gtk.StackSwitcher ();
-            stack_switcher.homogeneous = true;
-
-            this.show_close_button = true;
-            this.custom_title = stack_switcher;
-
-            menu_button = new Gtk.MenuButton ();
-            // Check if open-menu is a symbolic icon by default
-            var icon_theme = Gtk.IconTheme.get_default ();
-            var icon_regular = new ThemedIcon.with_default_fallbacks ("open-menu");
-            var icon_info_regular = icon_theme.lookup_by_gicon
-                (icon_regular, 24, Gtk.IconLookupFlags.USE_BUILTIN);
-
-            var icon_symbolic = new ThemedIcon.with_default_fallbacks ("open-menu-symbolic");
-            var icon_info_symbolic = icon_theme.lookup_by_gicon
-                (icon_symbolic, 24, Gtk.IconLookupFlags.USE_BUILTIN);
-
-            if (icon_info_regular.get_filename () == icon_info_symbolic.get_filename ()) {
-                // open-menu is a symbolic icon => Use a smaller version
-                menu_button.image = new Gtk.Image.from_icon_name ("open-menu-symbolic", Gtk.IconSize.SMALL_TOOLBAR);
-            } else {
-                // open-menu is a regular icon => Use a larger version
-                menu_button.image = new Gtk.Image.from_icon_name ("open-menu", Gtk.IconSize.LARGE_TOOLBAR);
-            }
-
+            headerbar.title_widget = stack_switcher;
 
             var main_menu = new GLib.Menu ();
             partition_menu = new GLib.Menu ();
             main_menu.append_submenu (_("Monitored partition"), partition_menu);
             main_menu.append (_("Quit"), "app.quit");
 
-            menu = new Gtk.Popover.from_model (null, main_menu);
-            menu_button.popover = menu;
-            pack_end (menu_button);
+            menu = new Gtk.PopoverMenu.from_model (main_menu);
 
+            menu_button = new Gtk.MenuButton () {
+                icon_name = "open-menu",
+                popover = menu,
+                primary = true
+            };
+            menu_button.add_css_class (Granite.STYLE_CLASS_LARGE_ICONS);
+            headerbar.pack_end (menu_button);
+
+            var style_manager = Granite.StyleManager.get_default ();
             var gtk_settings = Gtk.Settings.get_default ();
 
-            var mode_switch = new Granite.ModeSwitch.from_icon_name ("display-brightness-symbolic", "weather-clear-night-symbolic");
-            mode_switch.primary_icon_tooltip_text = _("Light background");
-            mode_switch.secondary_icon_tooltip_text = _("Dark background");
-            mode_switch.valign = Gtk.Align.CENTER;
-            mode_switch.bind_property ("active", gtk_settings, "gtk_application_prefer_dark_theme");
-            mode_switch.margin_end = 6;
-            mode_switch.active = gtk_settings.gtk_application_prefer_dark_theme;
+            var mode_switch = new Granite.ModeSwitch.from_icon_name ("display-brightness-symbolic", "weather-clear-night-symbolic") {
+                primary_icon_tooltip_text = _("Light background"),
+                secondary_icon_tooltip_text = _("Dark background"),
+                valign = Gtk.Align.CENTER,
+                margin_end = 6
+            };
+
+            // Reflect the effective style, which may come from the system preference
+            mode_switch.active = style_manager.color_scheme == Gtk.InterfaceColorScheme.DARK || (
+                style_manager.color_scheme == Gtk.InterfaceColorScheme.DEFAULT &&
+                gtk_settings.gtk_interface_color_scheme == Gtk.InterfaceColorScheme.DARK
+            );
+
             mode_switch.notify["active"].connect (() => {
-                Configs.Settings.get_instance ().dark_theme =
-                    gtk_settings.gtk_application_prefer_dark_theme;
+                style_manager.color_scheme = mode_switch.active ?
+                    Gtk.InterfaceColorScheme.DARK : Gtk.InterfaceColorScheme.LIGHT;
+                Configs.Settings.get_instance ().dark_theme = mode_switch.active;
             });
-            pack_end (mode_switch);
+            headerbar.pack_end (mode_switch);
         }
 
         public void add_partition (string partition_path) {

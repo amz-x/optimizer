@@ -100,7 +100,7 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
     private Gtk.Label description_label;
     private GLib.HashTable<int, FillBlock> blocks;
     private int index = 0;
-    private Gtk.Box fillblock_box;
+    private FillBlockBox fillblock_box;
     private Gtk.Box legend_box;
     private FillBlock free_space;
     private FillBlock used_space;
@@ -126,52 +126,30 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
 
     construct {
         orientation = Gtk.Orientation.VERTICAL;
+        add_css_class ("storage-bar");
+
         description_label = new Gtk.Label (null);
         description_label.hexpand = true;
         description_label.margin_top = 6;
-        get_style_context ().add_class (Granite.STYLE_CLASS_STORAGEBAR);
         blocks = new GLib.HashTable<int, FillBlock> (null, null);
-        fillblock_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 0);
-        fillblock_box.get_style_context ().add_class (Gtk.STYLE_CLASS_TROUGH);
+        fillblock_box = new FillBlockBox (this);
+        fillblock_box.add_css_class ("trough");
         fillblock_box.hexpand = true;
         inner_margin_sides = 12;
         legend_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 12);
-        legend_box.expand = true;
-        var legend_center_box = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 0);
-        legend_center_box.set_center_widget (legend_box);
-        var legend_scrolled = new Gtk.ScrolledWindow (null, null);
+        legend_box.halign = Gtk.Align.CENTER;
+        legend_box.hexpand = true;
+        var legend_scrolled = new Gtk.ScrolledWindow ();
         legend_scrolled.vscrollbar_policy = Gtk.PolicyType.NEVER;
+        legend_scrolled.propagate_natural_height = true;
         legend_scrolled.hexpand = true;
         legend_scrolled.margin_bottom = 12;
-        legend_scrolled.add (legend_center_box);
+        legend_scrolled.child = legend_box;
         var grid = new Gtk.Grid ();
         grid.attach (legend_scrolled, 0, 0, 1, 1);
         grid.attach (fillblock_box, 0, 1, 1, 1);
         grid.attach (description_label, 0, 2, 1, 1);
-        set_center_widget (grid);
-
-        fillblock_box.size_allocate.connect ((allocation) => {
-            // lost_size is here because we use truncation so that it is possible for a full device to have a filed bar.
-            double lost_size = 0;
-            int current_x = allocation.x;
-            for (int i = 0; i < blocks.length; i++) {
-                weak FillBlock block = blocks.get (i);
-                if (block == null || block.visible == false)
-                    continue;
-
-                var new_allocation = Gtk.Allocation ();
-                new_allocation.x = current_x;
-                new_allocation.y = allocation.y;
-                double width = (((double)allocation.width) * (double) block.size / (double) storage) + lost_size;
-                lost_size -= GLib.Math.trunc (lost_size);
-                new_allocation.width = (int) GLib.Math.trunc (width);
-                new_allocation.height = allocation.height;
-                block.size_allocate_with_baseline (new_allocation, block.get_allocated_baseline ());
-
-                lost_size = width - new_allocation.width;
-                current_x += new_allocation.width;
-            }
-        });
+        append (grid);
 
         create_default_blocks ();
     }
@@ -189,36 +167,46 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
 
         seq.foreach ((description) => {
             var fill_block = new FillBlock (description, 0);
-            fillblock_box.add (fill_block);
-            legend_box.add (fill_block.legend_item);
+            fillblock_box.add_block (fill_block);
+            legend_box.append (fill_block.legend_item);
             blocks.set (index, fill_block);
             index++;
         });
 
         free_space = new FillBlock (ItemDescription.OTHER, storage);
         used_space = new FillBlock (ItemDescription.OTHER, total_usage);
-        free_space.get_style_context ().add_class ("empty-block");
+        free_space.add_css_class ("empty-block");
         blocks.set (index++, used_space);
         blocks.set (index++, free_space);
-        fillblock_box.add (used_space);
-        fillblock_box.add (free_space);
+        fillblock_box.add_block (used_space);
+        fillblock_box.add_block (free_space);
 
         update_size_description ();
     }
 
     private void update_size_description () {
+        if (blocks == null) {
+            // Called from a property setter during construction
+            return;
+        }
+
         uint64 user_size = 0;
-        foreach (weak FillBlock block in blocks.get_values ()) {
+        foreach (unowned FillBlock block in blocks.get_values ()) {
             if (block.visible == false || block == free_space || block == used_space)
                 continue;
             user_size += block.size;
         }
 
         uint64 free = storage - user_size;
-        used_space.size = total_usage - user_size;
+        if (used_space != null) {
+            used_space.size = total_usage - user_size;
+        }
 
-        free_space.size = free;
+        if (free_space != null) {
+            free_space.size = free;
+        }
         description_label.label = _("%s out of %s can be deleted").printf (GLib.format_size (storage - free, FormatSizeFlags.IEC_UNITS), GLib.format_size (storage, FormatSizeFlags.IEC_UNITS));
+        fillblock_box.queue_allocate ();
     }
 
     /**
@@ -228,11 +216,89 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
      * @param size the size of the category or 0 to hide.
      */
     public void update_block_size (ItemDescription description, uint64 size) {
-        foreach (weak FillBlock block in blocks.get_values ()) {
+        foreach (unowned FillBlock block in blocks.get_values ()) {
             if (block.description == description) {
                 block.size = size;
                 update_size_description ();
                 return;
+            }
+        }
+    }
+
+    /**
+     * Lays out the fill blocks horizontally, each one taking up a share of the
+     * width proportional to the space it represents.
+     */
+    internal class FillBlockBox : Gtk.Widget {
+        private unowned CustomStorageBar bar;
+        private GLib.List<FillBlock> children = new GLib.List<FillBlock> ();
+
+        internal FillBlockBox (CustomStorageBar bar) {
+            this.bar = bar;
+            overflow = Gtk.Overflow.HIDDEN;
+        }
+
+        internal void add_block (FillBlock block) {
+            block.set_parent (this);
+            children.append (block);
+        }
+
+        public override void dispose () {
+            foreach (unowned FillBlock block in children) {
+                block.unparent ();
+            }
+            children = new GLib.List<FillBlock> ();
+            base.dispose ();
+        }
+
+        public override Gtk.SizeRequestMode get_request_mode () {
+            return Gtk.SizeRequestMode.CONSTANT_SIZE;
+        }
+
+        public override void measure (Gtk.Orientation orientation, int for_size,
+                                      out int minimum, out int natural,
+                                      out int minimum_baseline, out int natural_baseline) {
+            minimum = 0;
+            natural = 0;
+            minimum_baseline = -1;
+            natural_baseline = -1;
+
+            foreach (unowned FillBlock block in children) {
+                if (!block.has_size ()) {
+                    continue;
+                }
+
+                int child_min, child_nat;
+                block.measure (orientation, -1, out child_min, out child_nat, null, null);
+                if (orientation == Gtk.Orientation.VERTICAL) {
+                    minimum = int.max (minimum, child_min);
+                    natural = int.max (natural, child_nat);
+                }
+            }
+        }
+
+        public override void size_allocate (int width, int height, int baseline) {
+            // lost_size is here because we use truncation so that it is possible for a full device to have a filled bar.
+            double lost_size = 0;
+            int current_x = 0;
+            var storage = bar.storage;
+
+            foreach (unowned FillBlock block in children) {
+                if (!block.has_size ()) {
+                    continue;
+                }
+
+                double block_width = 0;
+                if (storage > 0) {
+                    block_width = (((double) width) * (double) block.size / (double) storage) + lost_size;
+                }
+                var allocated_width = (int) GLib.Math.trunc (block_width);
+                lost_size = block_width - allocated_width;
+
+                var transform = new Gsk.Transform ().translate (Graphene.Point () { x = current_x, y = 0 });
+                block.allocate (allocated_width, height, baseline, transform);
+
+                current_x += allocated_width;
             }
         }
     }
@@ -246,14 +312,10 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
             set {
                 _size = value;
                 if (_size == 0) {
-                    no_show_all = true;
                     visible = false;
-                    legend_item.no_show_all = true;
                     legend_item.visible = false;
                 } else {
-                    no_show_all = false;
                     visible = true;
-                    legend_item.no_show_all = false;
                     legend_item.visible = true;
                     size_label.label = GLib.format_size (_size, FormatSizeFlags.IEC_UNITS);
                     queue_resize ();
@@ -271,15 +333,14 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
             Object (size: size, description: description);
             var clas = ItemDescription.get_class (description);
             if (clas != null) {
-                get_style_context ().add_class (clas);
-                legend_fill.get_style_context ().add_class (clas);
+                add_css_class (clas);
+                legend_fill.add_css_class (clas);
             }
 
             name_label.label = "<b>%s</b>".printf (GLib.Markup.escape_text (ItemDescription.get_name (description)));
         }
 
         construct {
-            show_all ();
             legend_item = new Gtk.Grid ();
             legend_item.column_spacing = 6;
             name_label = new Gtk.Label (null);
@@ -288,52 +349,33 @@ public class Optimizer.Widgets.CustomStorageBar : Gtk.Box {
             size_label = new Gtk.Label (null);
             size_label.halign = Gtk.Align.START;
             legend_fill = new FillRound ();
-            legend_fill.get_style_context ().add_class ("legend");
-            var legend_box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
-            legend_box.set_center_widget (legend_fill);
-            legend_item.attach (legend_box, 0, 0, 1, 2);
+            legend_fill.add_css_class ("legend");
+            legend_fill.hexpand = false;
+            legend_fill.vexpand = false;
+            legend_fill.valign = Gtk.Align.CENTER;
+            legend_item.attach (legend_fill, 0, 0, 1, 2);
             legend_item.attach (name_label, 1, 0, 1, 1);
             legend_item.attach (size_label, 1, 1, 1, 1);
         }
+
+        internal bool has_size () {
+            return visible && size > 0;
+        }
     }
 
+    /**
+     * A widget that only draws its CSS background and border; its size and
+     * colors are defined in Application.css.
+     */
     internal class FillRound : Gtk.Widget {
         internal FillRound () {
 
         }
 
         construct {
-            set_has_window (false);
-            var style_context = get_style_context ();
-            style_context.add_class ("fill-block");
-            expand = true;
-        }
-
-        public override bool draw (Cairo.Context cr) {
-            var width = get_allocated_width ();
-            var height = get_allocated_height ();
-            var context = get_style_context ();
-            context.render_background (cr, 0, 0, width, height);
-            context.render_frame (cr, 0, 0, width, height);
-            return true;
-        }
-
-        public override void get_preferred_width (out int minimum_width, out int natural_width) {
-            base.get_preferred_width (out minimum_width, out natural_width);
-            var context = get_style_context ();
-            var padding = context.get_padding (get_state_flags ());
-            minimum_width = int.max (padding.left + padding.right, minimum_width);
-            minimum_width = int.max (1, minimum_width);
-            natural_width = int.max (minimum_width, natural_width);
-        }
-
-        public override void get_preferred_height (out int minimum_height, out int natural_height) {
-            base.get_preferred_height (out minimum_height, out natural_height);
-            var context = get_style_context ();
-            var padding = context.get_padding (get_state_flags ());
-            minimum_height = int.max (padding.top + padding.bottom, minimum_height);
-            minimum_height = int.max (1, minimum_height);
-            natural_height = int.max (minimum_height, natural_height);
+            add_css_class ("fill-block");
+            hexpand = true;
+            vexpand = true;
         }
     }
 }

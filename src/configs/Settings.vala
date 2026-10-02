@@ -19,13 +19,13 @@
 namespace Optimizer.Configs {
 
     /**
-     * The {@code Settings} class is responsible for defining all
-     * the texts that are displayed in the application and must be translated.
+     * The {@code Settings} class provides typed access to the application's
+     * GSettings schema.
      *
-     * @see Granite.Services.Settings
+     * @see GLib.Settings
      * @since 1.0.0
      */
-    public class Settings : Granite.Services.Settings {
+    public class Settings : GLib.Settings {
 
         /**
          * This static property represents the {@code Settings} type.
@@ -33,37 +33,60 @@ namespace Optimizer.Configs {
         private static Settings? instance;
 
         /**
-         * This property will represent the location x of the screen.
-         * Variable of type {@code int} as declared.
+         * The most recent width of the window.
          */
-        public int window_x { get; set; }
+        public int window_width {
+            get { return get_int ("window-width"); }
+            set { set_int ("window-width", value); }
+        }
 
         /**
-         * This property will represent the location y of the screen.
-         * Variable of type {@code int} as declared.
+         * The most recent height of the window.
          */
-        public int window_y { get; set; }
+        public int window_height {
+            get { return get_int ("window-height"); }
+            set { set_int ("window-height", value); }
+        }
+
+        /**
+         * Whether the window was maximized when it was last closed.
+         */
+        public bool window_maximized {
+            get { return get_boolean ("window-maximized"); }
+            set { set_boolean ("window-maximized", value); }
+        }
 
         /**
          * This property will represent the mount path of the partition that is
          * monitored in the dashboard view.
-         * Variable of type {@code string} as declared.
          */
-        public string monitored_partition { get; set; }
+        public string monitored_partition {
+            owned get { return get_string ("monitored-partition"); }
+            set { set_string ("monitored-partition", value); }
+        }
 
         /**
          * This property is set to true when the user selected a dark theme using
          * the ModeSwitch.
-         * Variable of type {@code bool} as declared.
          */
-        public bool dark_theme { get; set; }
+        public bool dark_theme {
+            get { return get_boolean ("dark-theme"); }
+            set { set_boolean ("dark-theme", value); }
+        }
 
         /**
-         * Constructs a new {@code Settings} object
-         * and sets the default exit folder.
+         * Whether the user ever explicitly chose a light or dark style.
+         * If not, the application follows the system style.
+         */
+        public bool has_style_preference {
+            get { return get_user_value ("dark-theme") != null; }
+        }
+
+        /**
+         * Constructs a new {@code Settings} object.
          */
         private Settings () {
-            base (Constants.ID);
+            Object (schema_id: Constants.ID);
         }
 
         /**

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-    <gresource prefix="/com/github/hannesschulze/optimizer/css">
-        <file alias="style.css" compressed="true">css/style.css</file>
+    <!-- Granite.StyleManager loads Application.css from the app's resource base path automatically -->
+    <gresource prefix="/com/github/hannesschulze/optimizer">
+        <file compressed="true">Application.css</file>
     </gresource>
 
     <gresource prefix="/com/github/hannesschulze/optimizer/images">

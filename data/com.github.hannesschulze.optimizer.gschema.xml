@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="optimizer">
 	<schema id="com.github.hannesschulze.optimizer" path="/com/github/hannesschulze/optimizer/">
-	  <key name="window-x" type="i">
-      <default>-1</default>
-      <summary>Most recent x position of Optimizer</summary>
-      <description>Most recent x position of Optimizer</description>
+    <key name="window-width" type="i">
+      <default>900</default>
+      <summary>Most recent window width</summary>
+      <description>Most recent width of the Optimizer window</description>
     </key>
 
-    <key name="window-y" type="i">
-      <default>-1</default>
-      <summary>Most recent y position of Optimizer</summary>
-      <description>Most recent y position of Optimizer</description>
+    <key name="window-height" type="i">
+      <default>540</default>
+      <summary>Most recent window height</summary>
+      <description>Most recent height of the Optimizer window</description>
+    </key>
+
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Whether the window was maximized</summary>
+      <description>Whether the Optimizer window was maximized when it was last closed</description>
     </key>
 
 	  <key name="monitored-partition" type="s">
@@ -22,7 +28,7 @@
     <key name="dark-theme" type="b">
 	    <default>false</default>
 	    <summary>Use a dark theme</summary>
-	    <description>Use a dark theme</description>
+	    <description>Use a dark theme. If this key has never been set, Optimizer follows the system style.</description>
 	  </key>
 	</schema>
 </schemalist>

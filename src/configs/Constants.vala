@@ -39,7 +39,6 @@ namespace Optimizer.Configs {
         public abstract const string TRANSLATE_URL = "https://github.com/hannesschulze/optimizer";
         public abstract const string TEXT_FOR_ABOUT_DIALOG_WEBSITE = _("Website");
         public abstract const string TEXT_FOR_ABOUT_DIALOG_WEBSITE_URL = "https://github.com/hannesschulze/optimizer";
-        public abstract const string URL_CSS = "/com/github/hannesschulze/optimizer/css/style.css";
         public abstract const string [] ABOUT_AUTHORS = { "Hannes Schulze <haschu0103@gmail.com>" };
         public abstract const Gtk.License ABOUT_LICENSE_TYPE = Gtk.License.GPL_3_0;
         public abstract const bool USE_FALLBACK_PROGRESS_BAR_THEME = @USE_FALLBACK_THEME@;

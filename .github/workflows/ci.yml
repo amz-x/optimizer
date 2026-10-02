@@ -5,20 +5,24 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: elementary/docker:odin-stable
+    # Granite 9 requires GTK >= 4.22. If libgranite-9-dev isn't packaged in the
+    # image yet, Meson builds Granite from subprojects/granite.wrap instead.
+    container: ghcr.io/elementary/docker:development-target
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: Install Dependencies
       run: |
         apt-get update &&
-        apt-get install -y elementary-sdk libgtop2-dev libwnck-3-dev
+        apt-get install -y git meson valac sassc libgee-0.8-dev libgtk-4-dev libgtop2-dev desktop-file-utils appstream-util
       env:
         TZ: America/New_York
         DEBIAN_FRONTEND: noninteractive
     - name: Configure
-      run: meson build --prefix=/usr
+      run: meson setup build --prefix=/usr
     - name: Build
       run: ninja -C build
+    - name: Test
+      run: meson test -C build --print-errorlogs
     - name: Install
       run: ninja -C build install

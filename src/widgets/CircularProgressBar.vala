@@ -26,11 +26,13 @@ namespace Optimizer.Widgets {
      *
      * @since 1.0.0
      */
-    public class CircularProgressBar : Gtk.Bin {
+    public class CircularProgressBar : Gtk.Widget {
         private const int MIN_DIAMETER = 80;
         private const double LINE_WIDTH = 7.0;
         private double m_percentage = 0.0;
         private bool m_is_in_focus = true;
+        private ulong window_active_handler = 0;
+        private unowned Gtk.Window? tracked_window = null;
 
         [Description(nick = "Percentage/Value", blurb = "The percentage value [0.0 ... 1.0]")]
         public double percentage {
@@ -59,76 +61,83 @@ namespace Optimizer.Widgets {
          */
         public CircularProgressBar () {
             set_size_request (200, 200);
-            notify.connect (() => {
+            notify.connect ((pspec) => {
+                if (pspec.name == "root") {
+                    track_window ();
+                }
                 queue_draw ();
             });
+        }
 
-            realize.connect (() => {
-                var toplevel_widget = get_toplevel ();
-                if (toplevel_widget is Gtk.Window) {
-                    ((Gtk.Window) toplevel_widget).focus_in_event.connect (() => {
-                        m_is_in_focus = true;
-                        queue_draw ();
-                        return false;
-                    });
-                    ((Gtk.Window) toplevel_widget).focus_out_event.connect (() => {
-                        m_is_in_focus = false;
-                        queue_draw ();
-                        return false;
-                    });
-                }
-            });
+        // Dim the progress bar while the window is in the background
+        private void track_window () {
+            if (tracked_window != null && window_active_handler != 0) {
+                tracked_window.disconnect (window_active_handler);
+            }
+            window_active_handler = 0;
+
+            tracked_window = get_root () as Gtk.Window;
+            if (tracked_window != null) {
+                window_active_handler = tracked_window.notify["is-active"].connect (() => {
+                    m_is_in_focus = tracked_window.is_active;
+                    queue_draw ();
+                });
+                m_is_in_focus = tracked_window.is_active;
+            }
+        }
+
+        // Redraw when the style (e.g. light/dark) changes
+        public override void css_changed (Gtk.CssStyleChange change) {
+            base.css_changed (change);
+            queue_draw ();
         }
 
         private int calculate_radius () {
-            return (int) double.min (get_allocated_width () / 2,
-                                     get_allocated_height () / 2) - 1;
-        }
-
-        private int calculate_diameter () {
-            return 2 * calculate_radius ();
+            return (int) double.min (get_width () / 2,
+                                     get_height () / 2) - 1;
         }
 
         public override Gtk.SizeRequestMode get_request_mode () {
             return Gtk.SizeRequestMode.CONSTANT_SIZE;
         }
 
-        public override void get_preferred_width (out int min_w, out int natural_w) {
-            var diameter = calculate_diameter ();
-            min_w = MIN_DIAMETER;
-            if (diameter > MIN_DIAMETER) {
-                natural_w = diameter;
-            } else {
-                natural_w = MIN_DIAMETER;
-            }
+        public override void measure (Gtk.Orientation orientation, int for_size,
+                                      out int minimum, out int natural,
+                                      out int minimum_baseline, out int natural_baseline) {
+            minimum = MIN_DIAMETER;
+            natural = MIN_DIAMETER;
+            minimum_baseline = -1;
+            natural_baseline = -1;
         }
 
-        public override void get_preferred_height (out int min_h, out int natural_h) {
-            var diameter = calculate_diameter ();
-            min_h = MIN_DIAMETER;
-            if (diameter > MIN_DIAMETER) {
-                natural_h = diameter;
-            } else {
-                natural_h = MIN_DIAMETER;
+        public override void snapshot (Gtk.Snapshot snapshot) {
+            var width = get_width ();
+            var height = get_height ();
+            if (width <= 0 || height <= 0) {
+                return;
             }
+
+            var cr = snapshot.append_cairo (Graphene.Rect ().init (0, 0, width, height));
+            draw (cr);
         }
 
-        public override bool draw (Cairo.Context cr) {
+        private void draw (Cairo.Context cr) {
             int width, height;
             Pango.Layout layout;
             Pango.FontDescription font_description;
 
             cr.save ();
 
-            var center_x = (get_allocated_width () - 2) / 2;
-            var center_y = (get_allocated_height () - 2) / 2;
+            var center_x = (get_width () - 2) / 2;
+            var center_y = (get_height () - 2) / 2;
             var radius = (double) (calculate_radius () - 1);
 
+            // Use the foreground color to detect whether a dark style is in use;
+            // this works for both the system preference and the in-app ModeSwitch.
+            Gdk.RGBA color = get_color ();
+            var dark = (color.red + color.green + color.blue) / 3.0 > 0.5;
+
             // Radius fill
-            var settings = Gtk.Settings.get_default();
-		    var theme = Environment.get_variable("GTK_THEME");
-            var dark = settings.gtk_application_prefer_dark_theme || 
-                       (theme != null && theme.has_suffix(":dark"));
 
             if (dark) {
                 if (Constants.USE_FALLBACK_PROGRESS_BAR_THEME) {
@@ -227,14 +236,9 @@ namespace Optimizer.Widgets {
             }
 
             // Textual information
-            var context = get_style_context ();
-            context.save ();
-            context.add_class (Gtk.STYLE_CLASS_TROUGH);
-            Gdk.RGBA color = context.get_color (context.get_state ());
-            Pango.FontDescription? baseFont;
-            context.@get (context.get_state (), "font", out baseFont, null);
+            var baseFont = get_pango_context ().get_font_description ();
             if (baseFont == null) {
-                baseFont = new Pango.FontDescription();
+                baseFont = new Pango.FontDescription ();
             }
             Gdk.cairo_set_source_rgba (cr, color);
 
@@ -265,10 +269,7 @@ namespace Optimizer.Widgets {
             cr.move_to (center_x - ((width / Pango.SCALE) / 2), center_y + 18);
             Pango.cairo_show_layout (cr, layout);
 
-            context.restore ();
             cr.restore ();
-
-            return base.draw (cr);
         }
 
         private void mask_arc (Cairo.Context cr, double radius, double shrink,

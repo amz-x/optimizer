@@ -17,42 +17,31 @@ namespace Optimizer {
          * Constructs a new {@code Window} object.
          *
          * @see App.Configs.Constants
-         * @see style_provider
-         * @see build
          */
         public Window (Gtk.Application app) {
             Object (
                 application: app,
                 icon_name: Constants.APP_ICON,
-                resizable: true
+                resizable: true,
+                title: Constants.PROGRAME_NAME
             );
 
             var settings = Optimizer.Configs.Settings.get_instance ();
-            int x = settings.window_x;
-            int y = settings.window_y;
 
-            Gtk.Settings.get_default ().gtk_application_prefer_dark_theme = settings.dark_theme;
-
-            if (x != -1 && y != -1) {
-                move (x, y);
+            // GTK 4 doesn't let applications position their windows, so only
+            // the size and maximized state are restored.
+            set_default_size (settings.window_width, settings.window_height);
+            if (settings.window_maximized) {
+                maximize ();
             }
 
-            var css_provider = new Gtk.CssProvider ();
-            css_provider.load_from_resource (Constants.URL_CSS);
-
-            Gtk.StyleContext.add_provider_for_screen (
-                Gdk.Screen.get_default (),
-                css_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            );
-
-            // Save the window's position on close
-            delete_event.connect (() => {
-                int root_x, root_y;
-                get_position (out root_x, out root_y);
-
-                settings.window_x = root_x;
-                settings.window_y = root_y;
+            // Save the window's size on close
+            close_request.connect (() => {
+                settings.window_maximized = maximized;
+                if (!maximized) {
+                    settings.window_width = get_width ();
+                    settings.window_height = get_height ();
+                }
                 return false;
             });
         }

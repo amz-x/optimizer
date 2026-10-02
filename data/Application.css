@@ -1,0 +1,76 @@
+/* style.css
+ *
+ * Copyright 2019 Hannes Schulze
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* Optimizer uses orange as its brand accent color */
+:root {
+  --accent-color: var(--ORANGE-500);
+}
+
+.processes_view actionbar button,
+.processes_view actionbar entry {
+  margin: 4px 6px;
+}
+
+/* Storage bar
+ *
+ * Granite 7+ no longer ships a storage bar, so the styles for the custom one
+ * used in the cleaner view live here.
+ */
+.storage-bar .trough {
+  min-height: 24px;
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--fg-color) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+.storage-bar .fill-block {
+  min-height: 24px;
+  background-color: var(--SILVER-500);
+  transition: all 200ms ease-in-out;
+}
+
+.storage-bar .fill-block.empty-block {
+  background-color: transparent;
+}
+
+.storage-bar .fill-block.legend {
+  min-width: 14px;
+  min-height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+.storage-bar .fill-block.files {
+  background-color: var(--ORANGE-300);
+}
+
+.storage-bar .fill-block.audio {
+  background-color: var(--STRAWBERRY-300);
+}
+
+.storage-bar .fill-block.video {
+  background-color: var(--GRAPE-300);
+}
+
+.storage-bar .fill-block.photo {
+  background-color: var(--BANANA-500);
+}
+
+.storage-bar .fill-block.app {
+  background-color: var(--BLUEBERRY-300);
+}

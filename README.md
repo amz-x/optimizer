@@ -17,31 +17,26 @@
 ### Dependencies
 
 These dependencies must be present before building:
- - `meson`
+ - `meson` (>= 0.59)
  - `valac`
- - `debhelper`
- - `libgranite-dev`
- - `libgtk-3-dev`
+ - `libgtk-4-dev` (>= 4.22)
+ - `libgranite-9-dev` (Granite 9)
+ - `libgee-0.8-dev`
  - `libgtop2-dev`
- - `libwnck-3-dev`
 
 Use the following command to install the dependencies on elementary OS:
 
 ```shell
-sudo apt install elementary-sdk libgtop2-dev libwnck-3-dev
+sudo apt install elementary-sdk libgtop2-dev
 ```
- 
-Use the following command to install the dependencies on other Debian-based systems:
 
-```shell
-sudo apt install meson valac appstream-util libgranite-dev libgtop2-dev libwnck-3-dev
-```
- 
+If Granite 9 isn't packaged for your system yet, Meson automatically builds it from source using `subprojects/granite.wrap` (this additionally requires `git` and `sassc`).
+
 ### Building
 
 ```
 git clone https://github.com/hannesschulze/optimizer.git && cd optimizer
-meson build --prefix=/usr
+meson setup build --prefix=/usr
 cd build
 ninja
 ```
